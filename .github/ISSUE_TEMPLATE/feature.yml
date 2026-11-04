@@ -1,0 +1,36 @@
+name: Tính năng / Task
+description: Một phần việc cần làm (API, màn hình, test...)
+title: "feat(<service|mobile>): "
+labels: [feature]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Phạm vi
+      options:
+        - identity-service / api-gateway / hạ tầng
+        - profile-service
+        - post-service
+        - notification-service
+        - chat-service
+        - mobile
+        - docs / báo cáo
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: Mục tiêu
+      description: Người dùng / hệ thống cần gì? Quy tắc nghiệp vụ liên quan (BR-xx trong docs/DESIGN.md)
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Tiêu chí hoàn thành
+      value: |
+        - [ ] API / màn hình chạy qua gateway
+        - [ ] Unit test (mvn -q test / flutter test) pass
+        - [ ] Cập nhật docs/DESIGN.md (nếu đổi API)
+    validations:
+      required: true

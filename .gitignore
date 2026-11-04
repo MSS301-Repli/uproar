@@ -1,0 +1,20 @@
+# Build output
+target/
+build/
+.dart_tool/
+*.iml
+.idea/
+.vscode/
+*.log
+
+# Secrets
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local-only notes (team/course context), never pushed
+docs/local/
+CLAUDE.local.md
+*.local.md

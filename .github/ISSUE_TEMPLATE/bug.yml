@@ -1,0 +1,25 @@
+name: Lỗi
+description: Báo một lỗi
+title: "fix(<service|mobile>): "
+labels: [bug]
+body:
+  - type: textarea
+    id: steps
+    attributes:
+      label: Các bước tái hiện
+      placeholder: |
+        1. Đăng nhập bằng ...
+        2. Gọi POST /api/... với body ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Kết quả mong đợi / thực tế
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log / response lỗi
+      render: text

@@ -1,0 +1,111 @@
+# Continuous Delivery: push a version tag to publish a release.
+#   git tag v0.1.0 && git push origin v0.1.0
+# Produces:
+#   - Docker image per service on GitHub Container Registry: ghcr.io/<owner>/<repo>/<service>:<version> and :latest
+#   - GitHub Release with the Android APKs and auto-generated release notes
+# Repository variable API_BASE_URL (Settings > Secrets and variables > Actions > Variables)
+# sets the server the released APK talks to; without it the APK targets the Android emulator.
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+permissions:
+  contents: write   # create the GitHub Release
+  packages: write   # push images to ghcr.io
+
+jobs:
+  services:
+    name: Detect services
+    runs-on: ubuntu-latest
+    outputs:
+      list: ${{ steps.find.outputs.list }}
+    steps:
+      - uses: actions/checkout@v7
+      # Only services that already have a Dockerfile are published
+      - id: find
+        run: echo "list=$(ls -d */Dockerfile | xargs -n1 dirname | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
+
+  images:
+    name: Image (${{ matrix.service }})
+    needs: services
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: ${{ fromJSON(needs.services.outputs.list) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: ${{ matrix.service }}/pom.xml
+      - name: Test and package
+        working-directory: ${{ matrix.service }}
+        run: mvn -B -ntp verify
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}/${{ matrix.service }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+      - uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.service }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  apk:
+    name: Android APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.9'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter test
+      # One small APK per CPU type instead of one big universal APK
+      - name: Build release APKs
+        run: >
+          flutter build apk --release --split-per-abi
+          --dart-define=API_BASE_URL=${{ vars.API_BASE_URL || 'http://10.0.2.2:8080' }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: apks
+          path: mobile/build/app/outputs/flutter-apk/*.apk
+
+  release:
+    name: GitHub Release
+    needs: [images, apk]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: apks
+          path: apks
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: apks/*.apk
+          generate_release_notes: true

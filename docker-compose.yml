@@ -1,0 +1,71 @@
+# Build jars first:  mvn -q package -DskipTests   (in each service folder), then:  docker compose up --build
+# Only api-gateway (8080) and the dev tools (Eureka dashboard, RabbitMQ UI) are published;
+# business services are reachable only inside the network, so nobody can skip the gateway's token check.
+services:
+
+  # ---------- Infrastructure ----------
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+    ports:
+      - "3306:3306"          # published for local dev (IDE runs); remove for production
+    volumes:
+      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  mongo:
+    image: mongo:8.0
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"        # management UI, guest/guest
+
+  discovery-server:
+    build: ./discovery-server
+    ports:
+      - "8761:8761"          # Eureka dashboard
+
+  api-gateway:
+    build: ./api-gateway
+    environment:
+      EUREKA_URL: http://discovery-server:8761/eureka
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+    ports:
+      - "8080:8080"
+    depends_on:
+      - discovery-server
+
+  # ---------- Business services ----------
+  identity-service:
+    build: ./identity-service
+    environment:
+      EUREKA_URL: http://discovery-server:8761/eureka
+      MYSQL_HOST: mysql
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@socialapp.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      discovery-server:
+        condition: service_started
+
+  # profile-service, post-service, notification-service, chat-service:
+  # each owner adds their block here, following identity-service.
+
+volumes:
+  mysql-data:
+  mongo-data:

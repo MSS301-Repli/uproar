@@ -1,0 +1,17 @@
+# Normalise line endings in the repo; Windows and Linux members get the same files
+* text=auto
+
+# Must stay LF or they break in bash / Docker / CI
+*.sh text eol=lf
+gradlew text eol=lf
+mvnw text eol=lf
+
+# Windows-only scripts
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binaries
+*.png binary
+*.jpg binary
+*.jar binary
+*.apk binary
